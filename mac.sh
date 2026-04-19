@@ -366,6 +366,44 @@ fi
 # =============================================================================
 echo ""
 echo "============================================"
+echo "  Claude Config"
+echo "============================================"
+# =============================================================================
+
+CLAUDE_DIR="$HOME/.claude"
+CLAUDE_DESKTOP_DIR="$HOME/Library/Application Support/Claude"
+mkdir -p "$CLAUDE_DIR/projects" "$CLAUDE_DESKTOP_DIR"
+
+# Copy Claude Code global settings.json
+if [ -f "$SCRIPT_DIR/claude/settings.json" ]; then
+  run "Copy Claude Code settings.json" cp "$SCRIPT_DIR/claude/settings.json" "$CLAUDE_DIR/settings.json"
+else
+  echo "    ⚠ claude/settings.json not found in repo, skipping"
+fi
+
+# Copy Claude Desktop config
+if [ -f "$SCRIPT_DIR/claude/desktop_config.json" ]; then
+  run "Copy Claude Desktop config" cp "$SCRIPT_DIR/claude/desktop_config.json" "$CLAUDE_DESKTOP_DIR/claude_desktop_config.json"
+else
+  echo "    ⚠ claude/desktop_config.json not found in repo, skipping"
+fi
+
+# Copy per-project memory dirs
+if [ -d "$SCRIPT_DIR/claude/projects" ]; then
+  for src in "$SCRIPT_DIR"/claude/projects/*/memory; do
+    [ -d "$src" ] || continue
+    name=$(basename "$(dirname "$src")")
+    dest="$CLAUDE_DIR/projects/$name/memory"
+    mkdir -p "$dest"
+    run "Copy Claude memory for $name" cp -R "$src/." "$dest/"
+  done
+else
+  echo "    ⚠ claude/projects/ not found in repo, skipping"
+fi
+
+# =============================================================================
+echo ""
+echo "============================================"
 echo "  Done!"
 echo "============================================"
 # =============================================================================

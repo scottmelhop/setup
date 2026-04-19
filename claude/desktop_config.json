@@ -1,0 +1,10 @@
+{
+  "mcpServers": {},
+  "preferences": {
+    "coworkScheduledTasksEnabled": true,
+    "ccdScheduledTasksEnabled": true,
+    "sidebarMode": "task",
+    "coworkWebSearchEnabled": true,
+    "floatingAtollActive": true
+  }
+}

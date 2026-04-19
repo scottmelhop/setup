@@ -1,0 +1,1 @@
+- [Auth-proxy namespace](project_auth_proxy_namespace.md) — auth-proxy lives in the oauth2-proxy k8s namespace

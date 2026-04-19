@@ -325,6 +325,7 @@ echo "============================================"
 
 run "Install Docker Desktop" brew install --cask docker
 run "Install Claude Code" brew install --cask claude-code
+run "Install Claude Desktop" brew install --cask claude
 
 # =============================================================================
 echo ""

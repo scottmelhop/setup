@@ -236,7 +236,16 @@ echo "============================================"
 # =============================================================================
 
 run_shell "Install Azure CLI" 'brew update && brew install azure-cli'
-run "Install kubectl + kubelogin via az" sudo az aks install-cli
+run "Install kubectl" brew install kubernetes-cli
+run "Install kubelogin" brew install kubelogin
+
+# If a previous run used sudo az, ~/.azure may be owned by root.
+# Fix ownership so `az login` can write its config.
+if [ -d "$HOME/.azure" ] && [ "$(stat -f %u "$HOME/.azure")" != "$(id -u)" ]; then
+  echo ""
+  echo "==> Fixing ownership of ~/.azure (was root-owned)"
+  sudo chown -R "$(id -u):$(id -g)" "$HOME/.azure"
+fi
 
 echo ""
 echo "==> Checking Azure login"

@@ -1,100 +1,327 @@
-# Uninstall Homebrew Go if present
-brew uninstall --ignore-dependencies go || true
+#!/bin/bash
 
-# Remove GOROOT and GOPATH from shell profiles
+# =============================================================================
+# Mac Setup Script
+# Prerequisites: Xcode CLI tools, Homebrew, gh CLI (see mac.md)
+# =============================================================================
+
+FAILURES=()
+
+# Run a command, echo what we're doing, and track failures
+run() {
+  local label="$1"
+  shift
+  echo ""
+  echo "==> $label"
+  if "$@"; then
+    echo "    ✓ $label"
+  else
+    echo "    ✗ FAILED: $label"
+    FAILURES+=("$label")
+  fi
+}
+
+# Same as run but for commands that use pipes/redirects/shell builtins
+run_shell() {
+  local label="$1"
+  shift
+  echo ""
+  echo "==> $label"
+  if eval "$@"; then
+    echo "    ✓ $label"
+  else
+    echo "    ✗ FAILED: $label"
+    FAILURES+=("$label")
+  fi
+}
+
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  Zsh Completions"
+echo "============================================"
+# =============================================================================
+
+run "Install zsh-completions" brew install zsh-completions
+run "Fix zsh-completions permissions" chmod go-w /opt/homebrew/share
+
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  Shell Configuration (~/.zshrc.setup)"
+echo "============================================"
+# =============================================================================
+
+SETUP_RC="$HOME/.zshrc.setup"
+echo "==> Writing shell config to $SETUP_RC"
+cat > "$SETUP_RC" << 'SHELL_CONFIG'
+# --- Homebrew zsh-completions ---
+if type brew &>/dev/null; then
+  FPATH=$(brew --prefix)/share/zsh-completions:$FPATH
+  autoload -Uz compinit
+  compinit
+fi
+
+# --- Pyenv ---
+export PYENV_ROOT="$HOME/.pyenv"
+[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init - zsh)"
+
+# --- GVM (Go Version Manager) ---
+[[ -s "$HOME/.gvm/scripts/gvm" ]] && source "$HOME/.gvm/scripts/gvm"
+
+# --- Build flags for zlib ---
+export LDFLAGS="-L/opt/homebrew/opt/zlib/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/zlib/include"
+export PKG_CONFIG_PATH="/opt/homebrew/opt/zlib/lib/pkgconfig"
+
+# --- Poetry / local bin ---
+export PATH="$HOME/.local/bin:$PATH"
+
+# --- NVM ---
+export NVM_DIR="$HOME/.nvm"
+[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
+[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
+
+# --- Locale ---
+export LANG="en_US.UTF-8"
+export LC_ALL="en_US.UTF-8"
+export LC_CTYPE="en_US.UTF-8"
+
+# --- Git completions ---
+fpath=(~/.zsh $fpath)
+
+# --- Kubectl aliases ---
+alias k="kubectl"
+alias kgp="kubectl get pods"
+alias kgs="kubectl get svc"
+alias kgd="kubectl get deployments"
+alias kgn="kubectl get nodes"
+alias kctx="kubectl config get-contexts"
+alias kuse="kubectl config use-context"
+alias kdel="kubectl delete"
+alias kdesc="kubectl describe"
+alias kl="kubectl logs"
+alias kex="kubectl exec -it"
+alias kpf="kubectl port-forward"
+alias kcp="kubectl cp"
+alias kroll="kubectl rollout"
+alias kscale="kubectl scale"
+alias ktop="kubectl top"
+
+# --- Git aliases ---
+alias commit="git commit -m "
+alias push="git push "
+alias pull="git pull "
+alias status="git status "
+alias co="git checkout "
+alias branch="git branch "
+alias merge="git merge "
+alias rebase="git rebase "
+alias stash="git stash "
+alias nb="git checkout -b "
+
+# Function: Push current branch and open PR creation page
+pr() {
+  branch=$(git rev-parse --abbrev-ref HEAD)
+  url=$(git push -u origin "$branch" 2>&1 | grep -Eo "https://github.com/[^ ]+/pull/new/[^ ]+")
+  if [ -n "$url" ]; then
+    open "$url"
+  else
+    echo "No PR link found in push output."
+  fi
+}
+SHELL_CONFIG
+echo "    ✓ Shell config written"
+
+echo "==> Sourcing .zshrc.setup from .zshrc (idempotent)"
+grep -q '.zshrc.setup' ~/.zshrc 2>/dev/null || \
+  echo '[ -f "$HOME/.zshrc.setup" ] && source "$HOME/.zshrc.setup"' >> ~/.zshrc
+echo "    ✓ .zshrc updated"
+
+source "$SETUP_RC"
+
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  Git Config"
+echo "============================================"
+# =============================================================================
+
+run "Set git user.name" git config --global user.name "Scott Melhop"
+run "Set git user.email" git config --global user.email "scott.melhop@volue.com"
+run "Set git core.editor" git config --global core.editor "code --wait"
+
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  Go (via gvm)"
+echo "============================================"
+# =============================================================================
+
+run "Uninstall Homebrew Go (if present)" brew uninstall --ignore-dependencies go || true
 sed -i '' '/GOROOT/d' ~/.zshrc
 sed -i '' '/GOPATH/d' ~/.zshrc
 
-# Install gvm dependencies
-git --version || brew install git
-brew install mercurial make binutils bison gcc
-
-# Install gvm
-bash < <(curl -sSL https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer)
-
-# Source gvm in current shell and add to .zshrc
-echo '[[ -s "$HOME/.gvm/scripts/gvm" ]] && source "$HOME/.gvm/scripts/gvm"' >> ~/.zshrc
+run "Install gvm dependencies" brew install mercurial make binutils bison gcc
+run_shell "Install gvm" 'bash < <(curl -sSL https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer)'
 [[ -s "$HOME/.gvm/scripts/gvm" ]] && source "$HOME/.gvm/scripts/gvm"
 
-gvm install go1.24.7
-gvm use go1.24.7 --default
+run "Install Go 1.24.7 via gvm" gvm install go1.24.7 -B
+run "Set Go 1.24.7 as default" gvm use go1.24.7 --default
 
-gh repo clone optimeeringas/optimus ~/github/optimeering/optimus
-gh repo clone optimeeringas/infrastructure ~/github/optimeering/infrastructure
-gh repo clone optimeeringas/mjolner ~/github/optimeering/mjolner
-gh repo clone optimeeringas/optimeering-python-sdk ~/github/optimeering/optimeering-python-sdk
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  Clone Repos"
+echo "============================================"
+# =============================================================================
 
-brew install pyenv
+run "Clone optimus" gh repo clone optimeeringas/optimus ~/github/optimeering/optimus || true
+run "Clone infrastructure" gh repo clone optimeeringas/infrastructure ~/github/optimeering/infrastructure || true
+run "Clone mjolner" gh repo clone optimeeringas/mjolner ~/github/optimeering/mjolner || true
+run "Clone optimeering-python-sdk" gh repo clone optimeeringas/optimeering-python-sdk ~/github/optimeering/optimeering-python-sdk || true
+run "Clone odin" gh repo clone optimeeringas/odin ~/github/optimeering/odin || true
+run "Clone prime" gh repo clone optimeeringas/prime ~/github/optimeering/prime || true
 
-echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.zshrc
-echo '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.zshrc
-echo 'eval "$(pyenv init - zsh)"' >> ~/.zshrc
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  Python (pyenv + poetry)"
+echo "============================================"
+# =============================================================================
 
-brew install openssl readline sqlite3 xz tcl-tk@8 libb2 zstd zlib pkgconfig
+run "Install pyenv" brew install pyenv
+run "Install Python build dependencies" brew install openssl readline sqlite3 xz tcl-tk@8 libb2 zstd zlib pkgconfig
 
+source "$SETUP_RC"
+run "Install Python 3.11" pyenv install -s 3.11
+run "Set Python 3.11 as global default" pyenv global 3.11
 
+run_shell "Install Poetry" 'curl -sSL https://install.python-poetry.org | python3 -'
+run "Configure Poetry virtualenvs in-project" poetry config virtualenvs.in-project true
 
-echo 'export LDFLAGS="-L/opt/homebrew/opt/zlib/lib"' >> ~/.zshrc
-echo 'export CPPFLAGS="-I/opt/homebrew/opt/zlib/include"' >> ~/.zshrc
-echo 'export PKG_CONFIG_PATH="/opt/homebrew/opt/zlib/lib/pkgconfig"' >> ~/.zshrc
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  uv"
+echo "============================================"
+# =============================================================================
 
-. ~/.zshrc 
+run_shell "Install uv" 'curl -LsSf https://astral.sh/uv/install.sh | sh'
 
-pyenv install 3.11
-pyenv global 3.11
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  Node (nvm + pnpm)"
+echo "============================================"
+# =============================================================================
 
-curl -sSL https://install.python-poetry.org | python3 -
+run "Install nvm" brew install nvm
+run "Install pnpm" brew install pnpm
 
-echo 'export PATH="/Users/scottmelhop/.local/bin:$PATH"' >> ~/.zshrc
+source "$SETUP_RC"
+run "Install Node 22" nvm install 22
+run "Set Node 22 as default" nvm alias default 22
 
-. ~/.zshrc
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  Azure CLI + Kubernetes"
+echo "============================================"
+# =============================================================================
 
-# Create the virtualenv inside the project’s root directory
-poetry config virtualenvs.in-project true
+run_shell "Install Azure CLI" 'brew update && brew install azure-cli'
+run "Install kubectl + kubelogin via az" sudo az aks install-cli
 
-brew update && brew install azure-cli
-
-sudo az aks install-cli
-
+echo ""
+echo "==> Azure login (interactive)"
 az login
-az account set --subscription f89df6fd-3521-4293-a210-ce8c8fa773a4
-az aks get-credentials --resource-group infra --name infra --overwrite-existing
-az aks get-credentials --resource-group production --name production --overwrite-existing
-az aks get-credentials --resource-group staging --name staging --overwrite-existing
-kubelogin convert-kubeconfig -l azurecli
+run "Set Azure subscription" az account set --subscription f89df6fd-3521-4293-a210-ce8c8fa773a4
+run "Get AKS credentials (infra)" az aks get-credentials --resource-group infra --name infra --overwrite-existing
+run "Get AKS credentials (production)" az aks get-credentials --resource-group production --name production --overwrite-existing
+run "Get AKS credentials (staging)" az aks get-credentials --resource-group staging --name staging --overwrite-existing
+run "Convert kubeconfig for azurecli" kubelogin convert-kubeconfig -l azurecli
 
-echo 'alias k="kubectl"' >> ~/.zshrc
-echo 'alias kgp="kubectl get pods"' >> ~/.zshrc
-echo 'alias kgs="kubectl get svc"' >> ~/.zshrc
-echo 'alias kgd="kubectl get deployments"' >> ~/.zshrc
-echo 'alias kgn="kubectl get nodes"' >> ~/.zshrc
-echo 'alias kctx="kubectl config get-contexts"' >> ~/.zshrc
-echo 'alias kuse="kubectl config use-context"' >> ~/.zshrc
-echo 'alias kdel="kubectl delete"' >> ~/.zshrc
-echo 'alias kdesc="kubectl describe"' >> ~/.zshrc
-echo 'alias kl="kubectl logs"' >> ~/.zshrc
-echo 'alias kex="kubectl exec -it"' >> ~/.zshrc
-echo 'alias kpf="kubectl port-forward"' >> ~/.zshrc
-echo 'alias kcp="kubectl cp"' >> ~/.zshrc
-echo 'alias kroll="kubectl rollout"' >> ~/.zshrc
-echo 'alias kscale="kubectl scale"' >> ~/.zshrc
-echo 'alias ktop="kubectl top"' >> ~/.zshrc
+run "Install helm" brew install helm
+run "Install minikube" brew install minikube
+run "Install argocd" brew install argocd
+run "Install skaffold" brew install skaffold
 
-. ~/.zshrc
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  Container Tools"
+echo "============================================"
+# =============================================================================
 
-brew install helm
+run "Install crane" brew install crane
+run "Install skopeo" brew install skopeo
+run "Install oras" brew install oras
 
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  Build Tools"
+echo "============================================"
+# =============================================================================
 
-# Install buildifier (Bazel build file formatter)
-# See: https://github.com/bazelbuild/buildtools/releases
+run "Install bazelisk" brew install bazelisk
+run "Install buildifier" brew install buildifier
+run "Install ibazel" brew install ibazel
 
-BUILDTOOLS_VERSION="6.4.0"  # Update as needed
-ARCH="$(uname -m)"
-if [ "$ARCH" = "arm64" ]; then
-  BUILDIFIER_URL="https://github.com/bazelbuild/buildtools/releases/download/v$BUILDTOOLS_VERSION/buildifier-darwin-arm64"
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  Other Tools"
+echo "============================================"
+# =============================================================================
+
+run "Install postgresql@18" brew install postgresql@18
+run "Install go-jsonnet" brew install go-jsonnet
+run "Install grpcurl" brew install grpcurl
+run "Install gnu-tar" brew install gnu-tar
+run "Install dotnet" brew install dotnet
+
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  Git Completions"
+echo "============================================"
+# =============================================================================
+
+run_shell "Download git-completion.zsh" 'curl -sSf https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.zsh -o ~/.git-completion.zsh'
+
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  Casks"
+echo "============================================"
+# =============================================================================
+
+run "Install Docker Desktop" brew install --cask docker
+run "Install Claude Code" brew install --cask claude-code
+
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  Done!"
+echo "============================================"
+# =============================================================================
+
+if [ ${#FAILURES[@]} -eq 0 ]; then
+  echo ""
+  echo "All steps completed successfully!"
 else
-  BUILDIFIER_URL="https://github.com/bazelbuild/buildtools/releases/download/v$BUILDTOOLS_VERSION/buildifier-darwin-amd64"
+  echo ""
+  echo "The following steps FAILED:"
+  echo ""
+  for f in "${FAILURES[@]}"; do
+    echo "  ✗ $f"
+  done
+  echo ""
+  echo "Review the output above and re-run or fix manually."
 fi
-mkdir -p "$HOME/.local/bin"
-curl -L "$BUILDIFIER_URL" -o "$HOME/.local/bin/buildifier"
-chmod +x "$HOME/.local/bin/buildifier"
+
+echo ""
+echo "Restart your terminal or run: source ~/.zshrc"

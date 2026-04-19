@@ -159,7 +159,12 @@ echo "  Go (via gvm)"
 echo "============================================"
 # =============================================================================
 
-run "Uninstall Homebrew Go (if present)" brew uninstall --ignore-dependencies go || true
+if brew list --formula go &>/dev/null; then
+  run "Uninstall Homebrew Go" brew uninstall --ignore-dependencies go
+else
+  echo ""
+  echo "==> Homebrew Go not installed, skipping uninstall"
+fi
 sed -i '' '/GOROOT/d' ~/.zshrc
 sed -i '' '/GOPATH/d' ~/.zshrc
 
@@ -181,7 +186,6 @@ run "Clone optimus" gh repo clone optimeeringas/optimus ~/github/optimeering/opt
 run "Clone infrastructure" gh repo clone optimeeringas/infrastructure ~/github/optimeering/infrastructure || true
 run "Clone mjolner" gh repo clone optimeeringas/mjolner ~/github/optimeering/mjolner || true
 run "Clone optimeering-python-sdk" gh repo clone optimeeringas/optimeering-python-sdk ~/github/optimeering/optimeering-python-sdk || true
-run "Clone odin" gh repo clone optimeeringas/odin ~/github/optimeering/odin || true
 run "Clone prime" gh repo clone optimeeringas/prime ~/github/optimeering/prime || true
 
 # =============================================================================
@@ -235,13 +239,24 @@ run_shell "Install Azure CLI" 'brew update && brew install azure-cli'
 run "Install kubectl + kubelogin via az" sudo az aks install-cli
 
 echo ""
-echo "==> Azure login (interactive)"
-az login
-run "Set Azure subscription" az account set --subscription f89df6fd-3521-4293-a210-ce8c8fa773a4
-run "Get AKS credentials (infra)" az aks get-credentials --resource-group infra --name infra --overwrite-existing
-run "Get AKS credentials (production)" az aks get-credentials --resource-group production --name production --overwrite-existing
-run "Get AKS credentials (staging)" az aks get-credentials --resource-group staging --name staging --overwrite-existing
-run "Convert kubeconfig for azurecli" kubelogin convert-kubeconfig -l azurecli
+echo "==> Checking Azure login"
+if az account show &>/dev/null; then
+  echo "    ✓ Already logged in as $(az account show --query user.name -o tsv)"
+else
+  echo "==> Azure login (device code — copy the code shown below into the URL)"
+  az login --use-device-code
+fi
+
+if ! az account show &>/dev/null; then
+  echo "    ✗ Azure login did not complete — skipping Azure setup"
+  FAILURES+=("Azure login (run 'az login' manually then re-run Azure section)")
+else
+  run "Set Azure subscription" az account set --subscription f89df6fd-3521-4293-a210-ce8c8fa773a4
+  run "Get AKS credentials (infra)" az aks get-credentials --resource-group infra --name infra --overwrite-existing
+  run "Get AKS credentials (production)" az aks get-credentials --resource-group production --name production --overwrite-existing
+  run "Get AKS credentials (staging)" az aks get-credentials --resource-group staging --name staging --overwrite-existing
+  run "Convert kubeconfig for azurecli" kubelogin convert-kubeconfig -l azurecli
+fi
 
 run "Install helm" brew install helm
 run "Install minikube" brew install minikube
@@ -301,6 +316,25 @@ echo "============================================"
 
 run "Install Docker Desktop" brew install --cask docker
 run "Install Claude Code" brew install --cask claude-code
+
+# =============================================================================
+echo ""
+echo "============================================"
+echo "  VS Code Extensions"
+echo "============================================"
+# =============================================================================
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EXTENSIONS_FILE="$SCRIPT_DIR/vscode-extensions.txt"
+if [ -f "$EXTENSIONS_FILE" ]; then
+  while IFS= read -r ext; do
+    [ -z "$ext" ] && continue
+    run "Install VS Code extension $ext" code --install-extension "$ext" --force
+  done < "$EXTENSIONS_FILE"
+else
+  echo "    ⚠ $EXTENSIONS_FILE not found, skipping"
+  FAILURES+=("VS Code extensions (vscode-extensions.txt missing)")
+fi
 
 # =============================================================================
 echo ""

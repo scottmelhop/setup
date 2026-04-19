@@ -320,11 +320,29 @@ run "Install Claude Code" brew install --cask claude-code
 # =============================================================================
 echo ""
 echo "============================================"
-echo "  VS Code Extensions"
+echo "  VS Code Config & Extensions"
 echo "============================================"
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VSCODE_USER_DIR="$HOME/Library/Application Support/Code/User"
+mkdir -p "$VSCODE_USER_DIR"
+
+# Copy settings.json
+if [ -f "$SCRIPT_DIR/vscode/settings.json" ]; then
+  run "Copy VS Code settings.json" cp "$SCRIPT_DIR/vscode/settings.json" "$VSCODE_USER_DIR/settings.json"
+else
+  echo "    ⚠ vscode/settings.json not found in repo, skipping"
+fi
+
+# Copy keybindings.json
+if [ -f "$SCRIPT_DIR/vscode/keybindings.json" ]; then
+  run "Copy VS Code keybindings.json" cp "$SCRIPT_DIR/vscode/keybindings.json" "$VSCODE_USER_DIR/keybindings.json"
+else
+  echo "    ⚠ vscode/keybindings.json not found in repo, skipping"
+fi
+
+# Install extensions
 EXTENSIONS_FILE="$SCRIPT_DIR/vscode-extensions.txt"
 if [ -f "$EXTENSIONS_FILE" ]; then
   while IFS= read -r ext; do

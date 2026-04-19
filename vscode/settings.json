@@ -1,0 +1,20 @@
+{
+  "github.copilot.enable": {
+    "*": false,
+    "plaintext": false,
+    "markdown": false,
+    "scminput": false,
+  },
+  "editor.inlineSuggest.enabled": false,
+  "github.copilot.chat.enabled": false,
+  "github.copilot.nextEditSuggestions.enabled": false,
+  "github.copilot.inlineSuggest.enable": false,
+  "github.copilot.autocomplete.enable": false,
+  "editor.suggest.showStatusBar": false,
+  "github.copilot.advanced": {
+    "debug.useElectronFetcher": false,
+    "debug.useNodeFetcher": false,
+  },
+  "claudeCode.preferredLocation": "panel",
+  "git.confirmSync": false,
+}
